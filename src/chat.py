@@ -51,7 +51,7 @@ class Chat:
                 print(args.persona, roles)
                 raise ValueError(f"Invalid persona: {args.persona}")
 
-            return roles[args.persona]["prompt"] + " BE CONCISE"
+            return roles[args.persona]["prompt"]
 
     def _flush_to_history(self):
         """
@@ -97,6 +97,7 @@ class Chat:
                     "id": tool_call.id,
                     "status": tool_call.status,
                 })
+                # self.history.append(tool_call)
 
                 # Assemble the function call output into a form the API will understand
                 function_output = {
@@ -118,7 +119,10 @@ class Chat:
                 print(chunk.delta, end="", flush=True)
             elif chunk.type == "response.completed":
                 # Response is done, append the response to the history
-                self.history.append({"role": "assistant", "content": chunk.response.output_text})
+                output = chunk.response.output_text
+                if output:
+                    # Don't consider empty outputs (like the response.completed event after a function call)
+                    self.history.append({"role": "assistant", "content": chunk.response.output_text})
 
     def start(self):
         while True:
