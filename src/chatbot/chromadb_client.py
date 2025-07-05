@@ -1,5 +1,5 @@
 import os
-from typing import Optional
+from typing import Any
 
 import chromadb
 from chromadb.utils.embedding_functions import OpenAIEmbeddingFunction
@@ -23,9 +23,9 @@ class ChromaDBClient:
 
     def add_to_collection(
         self,
-        ids,
-        embeddings: Optional[list[list[float]]] = None,
-        documents: Optional[list[str]] = None,
+        ids: list[str],
+        embeddings: list[Any],
+        documents: list[str],
     ):
         self.collection.add(
             ids=ids,

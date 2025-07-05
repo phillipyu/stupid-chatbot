@@ -1,5 +1,6 @@
 import json
 from importlib import resources
+from importlib.resources import as_file
 from typing import Optional
 
 import yaml
@@ -10,6 +11,7 @@ from openai.types.responses import ResponseFunctionToolCall, ResponseStreamEvent
 from platformdirs import user_data_path
 
 from chatbot.chromadb_client import ChromaDBClient
+from chatbot.embeddings_client import EmbeddingsClient
 from chatbot.utils import get_date_schema, get_date
 
 SIMILARITY_THRESHOLD = 0.5
@@ -21,15 +23,15 @@ class Chat:
     def __init__(self):
         self.openai_client = OpenAI()
         self.chromadb_client = ChromaDBClient("chatbot")
+        self.embeddings_client = EmbeddingsClient()
 
-        # TODO remove: Initialize the client with some random shit
-        self.chromadb_client.add_to_collection(
-            ids=["1", "2"],
-            documents=[
-                "Janice is an investment banker from PJT, who is about to start at CDNR soon!",
-                "Janice lives in the Townsway and is really obsessed with her boyfriend, Phillip Yu",
-            ],
+        # For now, just hardcode the resource to be embedded
+        # Ultimately, this should probably be user-defined
+        resource_path = resources.files("chatbot.resources").joinpath(
+            "remote_data_spec.md"
         )
+        with as_file(resource_path) as path:
+            self.embeddings_client.embed_document(path)
 
         parsed_args = self.parse_args()
         self.persona_instructions = self.validate_and_extract_persona_instructions(
@@ -184,6 +186,7 @@ class Chat:
         )
         for document, distance in closest_neighbors:
             if distance <= SIMILARITY_THRESHOLD:
+                # print(document, distance)
                 self.history.append(
                     {
                         "role": "system",
