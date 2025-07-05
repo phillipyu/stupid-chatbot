@@ -1,4 +1,5 @@
 import json
+import os
 from collections import defaultdict
 from typing import Optional
 
@@ -22,12 +23,17 @@ class Chat:
         self.tools = [get_date_schema]
 
         # Maintain conversation history, to allow the model to retain context from prior interactions
-        with open("history.json", "r") as f:
-            try:
-                self.history = json.load(f)
-            except json.JSONDecodeError:
-                print("Failed to load history.json, starting from scratch...")
-                self.history = []
+        if os.path.exists("history.json"):
+            with open("history.json", "r") as f:
+                try:
+                    self.history = json.load(f)
+                except json.JSONDecodeError:
+                    print("Failed to load history.json, starting from scratch...")
+                    self.history = []
+        else:
+            # File doesn't exist, start from scratch
+            # File will be created on flush
+            self.history = []
 
         # Maximum number of turns allowed in the history file
         self.MAX_TURNS = 20
@@ -61,6 +67,8 @@ class Chat:
         """
         with open("history.json", "w") as f:
             json.dump(self.history[-self.MAX_TURNS:], f)
+
+        print("History flushed to history.json")
 
     def _process_stream_response(self, response: Stream[ResponseStreamEvent]):
         tool_calls: dict[int, ResponseFunctionToolCall] = {}
