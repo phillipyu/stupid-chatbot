@@ -14,6 +14,7 @@ dependencies = [
   "openai>=1.93.0",
   "chromadb>=1.0.15",
   "pyyaml>=6.0.2",
+  "langchain>=0.3.26",
 ]
 classifiers = [
   "Programming Language :: Python :: 3 :: Only",
@@ -25,6 +26,7 @@ classifiers = [
 dev = ["pytest", "ruff", "black", "mypy", "pre-commit"]
 
 [project.scripts]
+# This lets you run "chatbot" from the command line anywhere in the repo
 chatbot = "chatbot.chat:main"
 
 [tool.setuptools]
