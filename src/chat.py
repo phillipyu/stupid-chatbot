@@ -9,7 +9,9 @@ import argparse
 from openai.types.responses import ResponseFunctionToolCall, ResponseStreamEvent
 
 from src.chromadb_client import ChromaDBClient
-from utils import get_date_schema, get_date
+from src.utils import get_date_schema, get_date
+
+SIMILARITY_THRESHOLD = 0.5
 
 
 class Chat:
@@ -163,10 +165,29 @@ class Chat:
                         {"role": "assistant", "content": chunk.response.output_text}
                     )
 
+    def _embed_user_message(self, message: str):
+        """
+        Embed the user's message + add the closest 3 embeddings to the history (provided they are similar enough)
+        """
+        closest_neighbors = self.chromadb_client.query_collection(
+            query_text=message,
+            n_results=3,
+        )
+        for document, distance in closest_neighbors:
+            if distance <= SIMILARITY_THRESHOLD:
+                self.history.append(
+                    {
+                        "role": "system",
+                        "content": "You are a helpful assistant. Use the document to answer the user's question: "
+                        + document,
+                    }
+                )
+
     def start(self):
         while True:
             try:
                 next_message = input("You: ")
+                self._embed_user_message(next_message)
                 self.history.append({"role": "user", "content": next_message})
                 response = self.openai_client.responses.create(
                     model="gpt-4.1",
