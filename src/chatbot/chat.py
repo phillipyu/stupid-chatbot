@@ -1,5 +1,5 @@
 import json
-import os
+from importlib import resources
 from typing import Optional
 
 import yaml
@@ -7,11 +7,14 @@ from openai import OpenAI, Stream
 import argparse
 
 from openai.types.responses import ResponseFunctionToolCall, ResponseStreamEvent
+from platformdirs import user_data_path
 
-from src.chromadb_client import ChromaDBClient
-from src.utils import get_date_schema, get_date
+from chatbot.chromadb_client import ChromaDBClient
+from chatbot.utils import get_date_schema, get_date
 
 SIMILARITY_THRESHOLD = 0.5
+APP_NAME = "chatbot"
+_HISTORY_FILE = "history.json"
 
 
 class Chat:
@@ -34,13 +37,19 @@ class Chat:
         )
         self.tools = [get_date_schema]
 
+        # Define an absolute path for the history file OUTSIDE of the package
+        # We shouldn't be writing to the package itself, don't want unintentional side effects
+        data_dir = user_data_path(APP_NAME)
+        data_dir.mkdir(parents=True, exist_ok=True)
+        self.history_path = data_dir / _HISTORY_FILE
+
         # Maintain conversation history, to allow the model to retain context from prior interactions
-        if os.path.exists("history.json"):
-            with open("history.json", "r") as f:
+        if self.history_path.exists():
+            with self.history_path.open("r") as f:
                 try:
                     self.history = json.load(f)
                 except json.JSONDecodeError:
-                    print("Failed to load history.json, starting from scratch...")
+                    print("Failed to load history, starting from scratch...")
                     self.history = []
         else:
             # File doesn't exist, start from scratch
@@ -67,7 +76,8 @@ class Chat:
         if not args.persona:
             return None
 
-        with open("roles.yaml", "r") as f:
+        config_path = resources.files("chatbot.config").joinpath("roles.yaml")
+        with config_path.open("r") as f:
             roles = yaml.safe_load(f)
             if args.persona not in roles:
                 print(args.persona, roles)
@@ -81,15 +91,14 @@ class Chat:
 
         Only keep the last MAX_TURNS history
         """
-        with open("history.json", "w") as f:
+        with self.history_path.open("w") as f:
             json.dump(self.history[-self.MAX_TURNS :], f)
 
-        print("History flushed to history.json")
+        print("History flushed!")
 
     def _process_stream_response(self, response: Stream[ResponseStreamEvent]):
         tool_calls: dict[int, ResponseFunctionToolCall] = {}
         for chunk in response:
-            # print(chunk)
             if (
                 chunk.type == "response.output_item.added"
                 and chunk.item.type == "function_call"
@@ -207,6 +216,7 @@ class Chat:
                 break
 
 
-if __name__ == "__main__":
+def main():
+    """Entry point for the `chatbot` console script."""
     chat = Chat()
     chat.start()

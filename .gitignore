@@ -3,3 +3,4 @@
 history.json
 .DS_Store
 resources/
+*.egg-info/
