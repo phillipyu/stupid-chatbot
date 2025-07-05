@@ -1,25 +1,35 @@
 import json
 import os
-from collections import defaultdict
 from typing import Optional
 
 import yaml
 from openai import OpenAI, Stream
 import argparse
 
-from openai.types.responses import ResponseOutputItem, ResponseFunctionCallArgumentsDeltaEvent, \
-    ResponseOutputItemAddedEvent, ResponseFunctionToolCall, ResponseTextDeltaEvent, ResponseCompletedEvent, \
-    ResponseStreamEvent
+from openai.types.responses import ResponseFunctionToolCall, ResponseStreamEvent
 
+from src.chromadb_client import ChromaDBClient
 from utils import get_date_schema, get_date
 
 
 class Chat:
     def __init__(self):
         self.openai_client = OpenAI()
+        self.chromadb_client = ChromaDBClient("chatbot")
+
+        # TODO remove: Initialize the client with some random shit
+        self.chromadb_client.add_to_collection(
+            ids=["1", "2"],
+            documents=[
+                "Janice is an investment banker from PJT, who is about to start at CDNR soon!",
+                "Janice lives in the Townsway and is really obsessed with her boyfriend, Phillip Yu",
+            ],
+        )
 
         parsed_args = self.parse_args()
-        self.persona_instructions = self.validate_and_extract_persona_instructions(parsed_args)
+        self.persona_instructions = self.validate_and_extract_persona_instructions(
+            parsed_args
+        )
         self.tools = [get_date_schema]
 
         # Maintain conversation history, to allow the model to retain context from prior interactions
@@ -41,8 +51,12 @@ class Chat:
     @classmethod
     def parse_args(cls):
         parser = argparse.ArgumentParser()
-        parser.add_argument("--persona", type=str, required=False,
-                            help="The persona of the chatbot. Select between: academic_professor, nerdy_software_engineer, finance_bro")
+        parser.add_argument(
+            "--persona",
+            type=str,
+            required=False,
+            help="The persona of the chatbot. Select between: academic_professor, nerdy_software_engineer, finance_bro",
+        )
         args = parser.parse_args()
         return args
 
@@ -66,7 +80,7 @@ class Chat:
         Only keep the last MAX_TURNS history
         """
         with open("history.json", "w") as f:
-            json.dump(self.history[-self.MAX_TURNS:], f)
+            json.dump(self.history[-self.MAX_TURNS :], f)
 
         print("History flushed to history.json")
 
@@ -74,15 +88,24 @@ class Chat:
         tool_calls: dict[int, ResponseFunctionToolCall] = {}
         for chunk in response:
             # print(chunk)
-            if chunk.type == "response.output_item.added" and chunk.item.type == "function_call":
+            if (
+                chunk.type == "response.output_item.added"
+                and chunk.item.type == "function_call"
+            ):
                 # Function call added
                 tool_calls[chunk.output_index] = chunk.item
                 print()
-                print(f"Invoking function {chunk.item.name} with arguments: ", end="", flush=True)
+                print(
+                    f"Invoking function {chunk.item.name} with arguments: ",
+                    end="",
+                    flush=True,
+                )
             elif chunk.type == "response.function_call_arguments.delta":
                 # Accumulate the function call arguments
                 if not tool_calls[chunk.output_index]:
-                    raise ValueError("Function call arguments delta received before function call added")
+                    raise ValueError(
+                        "Function call arguments delta received before function call added"
+                    )
 
                 tool_calls[chunk.output_index].arguments += chunk.delta
                 print(f"{chunk.delta}", end="", flush=True)
@@ -91,29 +114,35 @@ class Chat:
 
                 # We're done assembling the function call arguments. Let's call the function now!
                 if not tool_calls[chunk.output_index]:
-                    raise ValueError("Function call arguments done received before function call added")
+                    raise ValueError(
+                        "Function call arguments done received before function call added"
+                    )
 
                 tool_call: ResponseFunctionToolCall = tool_calls[chunk.output_index]
                 args = json.loads(tool_call.arguments)
                 result = get_date(args["timezone"])
                 # Append the function call to the history
-                self.history.append({
-                    "type": "function_call",
-                    "call_id": tool_call.call_id,
-                    "name": tool_call.name,
-                    "arguments": tool_call.arguments,
-                    "id": tool_call.id,
-                    "status": tool_call.status,
-                })
+                self.history.append(
+                    {
+                        "type": "function_call",
+                        "call_id": tool_call.call_id,
+                        "name": tool_call.name,
+                        "arguments": tool_call.arguments,
+                        "id": tool_call.id,
+                        "status": tool_call.status,
+                    }
+                )
                 # self.history.append(tool_call)
 
                 # Assemble the function call output into a form the API will understand
                 function_output = {
                     "type": "function_call_output",
                     "call_id": tool_call.call_id,
-                    "output": result
+                    "output": result,
                 }
-                self.history.append(function_output)  # Add the function call output to the history
+                self.history.append(
+                    function_output
+                )  # Add the function call output to the history
                 follow_up_response = self.openai_client.responses.create(
                     model="gpt-4.1",
                     input=self.history,
@@ -130,7 +159,9 @@ class Chat:
                 output = chunk.response.output_text
                 if output:
                     # Don't consider empty outputs (like the response.completed event after a function call)
-                    self.history.append({"role": "assistant", "content": chunk.response.output_text})
+                    self.history.append(
+                        {"role": "assistant", "content": chunk.response.output_text}
+                    )
 
     def start(self):
         while True:
@@ -153,6 +184,7 @@ class Chat:
             except KeyboardInterrupt:
                 self._flush_to_history()
                 break
+
 
 if __name__ == "__main__":
     chat = Chat()

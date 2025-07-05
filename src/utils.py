@@ -16,8 +16,9 @@ get_date_schema = {
         },
         "required": ["timezone"],
         "additionalProperties": False,
-    }
+    },
 }
+
 
 def get_date(timezone: str) -> str:
     """
